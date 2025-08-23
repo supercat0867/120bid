@@ -1,0 +1,28 @@
+# 120bid API 配置文件
+
+# 服务相关配置
+Server:
+  Port: "8080" # API运行端口
+
+# 数据库配置
+Database:
+  MySQL:
+    User: "root" # 用户名
+    Password: "" # 密码
+    Address: "localhost:3306" # 地址
+    DBName: "120_bid" # 数据库名
+
+# 代理IP配置
+ProxyIP:
+  AuthKey: ""
+  Password: ""
+
+# 代理池配置
+ProxyPool:
+  ProxyPool1: 30 # 这个是用于获取加密参数的client，可以设置的少一点，因为使用频率低
+  ProxyPool2: 50 # 这个要基于访问速度来动态调整
+
+
+# 其他配置
+Misc:
+  HtmlMaxSize: 80000 # html字符数
