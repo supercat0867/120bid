@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -127,7 +127,7 @@ func (p *ProxyClientPool) fetchNewProxyClient(count int) ([]*ProxyClient, error)
 	defer resp.Body.Close()
 
 	// 读取响应
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("代理IP请求响应读取失败：%v", err)
 	}
@@ -204,7 +204,7 @@ func (pc *ProxyClient) OpenSearchAll() error {
 	defer resp.Body.Close()
 
 	// 读取响应
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("全文搜索响应读取失败：%v", err)
 	}
@@ -231,15 +231,13 @@ func (pc *ProxyClient) GetNameAndValue() (string, string, error) {
 	}
 
 	// 设置请求头部信息
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	req.Header.Set("Host", "www.120bid.com")
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
-	req.Header.Set("Sec-Fetch-Mode", "cors")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
-	req.Header.Set("Referer", "https://www.120bid.com/search")
-	req.Header.Set("Sec-Fetch-Dest", "empty")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://www.120bid.com")
+	req.Header.Set("Sec-Fetch-Dest", "document")
 
 	// 发送请求
 	resp, err := pc.Client.Do(req)
@@ -289,7 +287,7 @@ func (pc *ProxyClient) Fetch120bidAPI(params string) (*A120binResponse, error) {
 	defer resp.Body.Close()
 
 	// 读取响应
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("120bidAPI响应读取失败：%v", err)
 	}
@@ -315,7 +313,7 @@ func (pc *ProxyClient) GetHtmlContentAndUrl(targetUrl string) (string, string, e
 	req.Header.Set("Host", "www.120bid.com")
 	req.Header.Set("Sec-Fetch-Dest", "document")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	req.Header.Set("Referer", "https://www.120bid.com/search")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.Header.Set("Sec-Fetch-Mode", "navigate")
@@ -337,12 +335,12 @@ func (pc *ProxyClient) GetHtmlContentAndUrl(targetUrl string) (string, string, e
 		}
 		defer gzipReader.Close()
 
-		body, err = ioutil.ReadAll(gzipReader)
+		body, err = io.ReadAll(gzipReader)
 		if err != nil {
 			return "", "", fmt.Errorf("读取解压后的数据失败：%v\n", err)
 		}
 	} else {
-		body, err = ioutil.ReadAll(resp.Body)
+		body, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return "", "", fmt.Errorf("公告内容响应读取失败：%v\n", err)
 		}
