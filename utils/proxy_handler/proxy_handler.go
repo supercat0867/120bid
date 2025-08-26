@@ -351,13 +351,8 @@ func (pc *ProxyClient) GetHtmlContentAndUrl(targetUrl string) (string, string, e
 	htmlContent = string(body)
 	// 检查字符数是否过多
 	if len(htmlContent) <= types.Conf.Misc.HtmlMaxSize {
-		// 解析html
-		doc, err := html.Parse(strings.NewReader(htmlContent))
+		divHTML, err := ExtractElementByID(htmlContent, "article", "content")
 		if err != nil {
-			return "", "", fmt.Errorf("公告内容解析失败：%v", err)
-		}
-		divHTML, found := findFirstDiv(doc)
-		if !found {
 			log.Println("公告HTML匹配失败,已将HTML字段设置为空")
 			htmlContent = ""
 		} else {
@@ -404,6 +399,48 @@ func (pc *ProxyClient) GetHtmlContentAndUrl(targetUrl string) (string, string, e
 	return htmlContent, originalLink, nil
 }
 
+// ExtractElementByID 从 HTML 内容中提取指定标签+id 的完整 HTML（包含自身标签）
+func ExtractElementByID(htmlContent, tagName, id string) (string, error) {
+	// 解析 HTML
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		return "", fmt.Errorf("HTML 解析失败: %v", err)
+	}
+
+	// 深度优先搜索目标节点
+	var target *html.Node
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == tagName {
+			for _, attr := range n.Attr {
+				if attr.Key == "id" && attr.Val == id {
+					target = n
+					return
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+			if target != nil {
+				return
+			}
+		}
+	}
+	f(doc)
+
+	if target == nil {
+		return "", fmt.Errorf("未找到 <%s id=\"%s\"> 节点", tagName, id)
+	}
+
+	// 序列化节点为 HTML
+	var buf bytes.Buffer
+	if err := html.Render(&buf, target); err != nil {
+		return "", fmt.Errorf("节点序列化失败: %v", err)
+	}
+
+	return buf.String(), nil
+}
+
 func findAndExtractInputAttributes(n *html.Node, inputType, inputID string) (name, value string, found bool) {
 	if n.Type == html.ElementNode && n.Data == "input" {
 		var isMatchedType, isMatchedID bool
@@ -433,35 +470,4 @@ func findAndExtractInputAttributes(n *html.Node, inputType, inputID string) (nam
 		}
 	}
 	return
-}
-
-func findFirstDiv(n *html.Node) (string, bool) {
-	// 检查当前节点是否是<article>
-	if n.Type == html.ElementNode && n.Data == "article" {
-		// 在<article>内查找第一个<div>
-		return findDivInArticle(n)
-	}
-	// 对所有子节点递归搜索
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		divHTML, found := findFirstDiv(c)
-		if found {
-			return divHTML, true
-		}
-	}
-	return "", false
-}
-
-func findDivInArticle(n *html.Node) (string, bool) {
-	if n.Type == html.ElementNode && n.Data == "div" {
-		var buf bytes.Buffer
-		html.Render(&buf, n)
-		return buf.String(), true
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		divHTML, found := findDivInArticle(c)
-		if found {
-			return divHTML, true
-		}
-	}
-	return "", false
 }
