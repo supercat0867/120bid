@@ -70,6 +70,7 @@ type Data struct {
 	User        string
 	Date        string
 	Html        string `gorm:"type:longtext"`
+	Keyword     string // 关键词
 }
 
 // Migrate 迁移数据库表结构

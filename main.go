@@ -95,6 +95,7 @@ func main() {
 					Title:       item.ItemRaw,
 					Status:      item.Status,
 					Area:        area,
+					Keyword:     item.Keyword,
 					City:        city,
 					User:        item.User,
 					Html:        content,

@@ -136,6 +136,7 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 
 		for index, v := range response.Data {
 			response.Data[index].Url = "https://www.120bid.com" + v.Url
+			response.Data[index].Keyword = params.Query
 		}
 
 		bids = append(bids, response.Data...)

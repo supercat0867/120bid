@@ -59,6 +59,7 @@ type Data struct {
 	DateStr   string      `json:"dateStr"`
 	Winner    string      `json:"winner,omitempty"`
 	PriceStr  string      `json:"priceStr,omitempty"`
+	Keyword   string      `json:"-"` // 查询关键词
 }
 
 func (s *SearchRsp) UnmarshalJSON(data []byte) error {
