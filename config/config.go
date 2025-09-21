@@ -2,34 +2,34 @@ package config
 
 import (
 	"fmt"
+
 	"github.com/spf13/viper"
 )
 
 // Config 配置文件结构
 type Config struct {
-	Server struct {
-		Port string
+	MySQL struct {
+		User     string
+		Password string
+		Host     string
+		Port     int
+		DB       string
 	}
-	Database struct {
-		MySQL struct {
-			User     string
-			Password string
-			Address  string
-			DBName   string
-		}
+
+	Params struct {
+		Keywords  []string
+		Status    []string
+		StartDate string
+		EndDate   string
 	}
+
 	ProxyIP struct {
 		AuthKey  string
 		Password string
 	}
-	ProxyPool struct {
-		ProxyPool1 int
-		ProxyPool2 int
-	}
-	Misc struct {
-		HtmlMaxSize int
-	}
 }
+
+var conf *Config
 
 // ReadConfig 读取配置文件
 func ReadConfig() *Config {
@@ -44,4 +44,12 @@ func ReadConfig() *Config {
 		panic(fmt.Sprintf("配置文件解析失败：%s", err.Error()))
 	}
 	return &conf
+}
+
+// GetConfig 获取配置文件
+func GetConfig() *Config {
+	if conf == nil {
+		conf = ReadConfig()
+	}
+	return conf
 }
