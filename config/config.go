@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/viper"
 )
@@ -33,9 +35,21 @@ var conf *Config
 
 // ReadConfig 读取配置文件
 func ReadConfig() *Config {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
+	// 1. 先尝试从程序所在目录加载
+	exePath, err := os.Executable()
+	if err != nil {
+		panic(fmt.Sprintf("获取程序路径失败：%s", err.Error()))
+	}
+	exeDir := filepath.Dir(exePath)
+	configPath := filepath.Join(exeDir, "config.yaml")
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// 2. 如果程序目录下没有，就尝试当前工作目录（IDE 调试时用）
+		configPath = "config.yaml"
+	}
+
+	viper.SetConfigFile(configPath)
+
 	if err := viper.ReadInConfig(); err != nil {
 		panic(fmt.Sprintf("配置文件读取失败：%s", err.Error()))
 	}
