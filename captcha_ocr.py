@@ -1,8 +1,9 @@
 import json
 import sys
-
 import ddddocr
 from PIL import Image
+import os
+import contextlib
 
 # 兼容 Pillow 版本差异
 if not hasattr(Image, 'ANTIALIAS'):
@@ -11,11 +12,12 @@ if not hasattr(Image, 'ANTIALIAS'):
 
 def recognize_captcha(image_path: str) -> str:
     """识别验证码并返回识别结果"""
-    ocr = ddddocr.DdddOcr()  # 默认模型
+    # 屏蔽 ddddocr 的打印信息
+    with open(os.devnull, 'w') as fnull, contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
+        ocr = ddddocr.DdddOcr()  # 默认模型
     with open(image_path, "rb") as f:
         img_bytes = f.read()
-    result = ocr.classification(img_bytes)
-    return result
+    return ocr.classification(img_bytes)
 
 
 if __name__ == "__main__":
