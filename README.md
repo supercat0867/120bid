@@ -1,6 +1,33 @@
 # 120bid
 
-## 请求参数
+该项目用于自动化访问 120bid.com 网站接口，包含验证码识别、数据抓取、以及结果处理等功能。
+验证码识别部分使用 Python 实现，核心依赖为 ddddocr。
+
+## 环境配置（必需）
+
+### Python 环境要求
+- Python 3.7+
+- 建议使用 Python 3.9 或更高版本（性能更好，兼容性更强）
+- 支持 Windows / macOS / Linux 系统
+
+### 安装依赖：
+进入项目根目录后执行：
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 验证安装：
+运行以下命令测试 OCR 是否可用：
+```bash
+python captcha_ocr.py example.jpeg
+```
+如果输出如下格式内容，说明环境已正确安装：
+```bash
+{"text": "9Byx4"}
+```
+
+## 参数说明
 
 | 参数名       | 必选 | 类型     | 说明                  |
 |-----------|----|--------|---------------------|

@@ -1,15 +1,20 @@
 package http
 
 import (
+	"120bid/constdef"
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,6 +22,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/supercat0867/proxyhttp"
+	"golang.org/x/net/context"
 	"golang.org/x/net/html"
 )
 
@@ -47,6 +53,11 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 	var lastsort []interface{}
 	var err error
 
+	// 首次必须打码验证
+	if err = h.crackCaptcha(20); err != nil {
+		return nil, err
+	}
+
 	// 开启全文检索
 	if err = h.openSearchAll(); err != nil {
 		return nil, err
@@ -54,7 +65,6 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 
 	refererParams := url.Values{}
 	refererParams.Set("q", params.Query)
-
 	referer := fmt.Sprintf("https://www.120bid.com/search?%s", refererParams.Encode())
 
 	bids := make([]Data, 0)
@@ -65,10 +75,10 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 		return nil, fmt.Errorf("获取name和value失败：%v", err)
 	}
 
-	for i := 1; i <= 20; i++ {
-		log.Printf("正在获取关键词【%s】第%d页数据...", params.Query, i)
+	// 定义一个发送请求的内部函数
+	doSearchPage := func(page int) (*SearchRsp, error) {
+		log.Printf("正在获取关键词【%s】第%d页数据...", params.Query, page)
 
-		// 拼接表单参数
 		form := url.Values{}
 		form.Add("q", params.Query)
 		if params.StartDate != "" && params.EndDate != "" {
@@ -78,7 +88,6 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 		for _, v := range params.Status {
 			form.Add("status[]", v)
 		}
-
 		form.Add(name, value)
 		if pit != "" {
 			form.Add("pit", pit)
@@ -92,13 +101,10 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 			}
 		}
 
-		formBody := strings.NewReader(form.Encode())
-
-		now := time.Now().UnixMilli()
-		link := fmt.Sprintf("https://www.120bid.com/ajax/search?t=%d", now)
-		req, err := http.NewRequest("POST", link, formBody)
+		link := fmt.Sprintf("https://www.120bid.com/ajax/search?t=%d", time.Now().UnixMilli())
+		req, err := http.NewRequest("POST", link, strings.NewReader(form.Encode()))
 		if err != nil {
-			return nil, fmt.Errorf("请求创建失败：%v", err)
+			return nil, fmt.Errorf("构造请求失败: %w", err)
 		}
 
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -109,21 +115,49 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 
 		resp, err := h.client.DoWithRetry(req, 3, 2*time.Second)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("请求失败: %w", err)
 		}
+		defer resp.Body.Close()
 
-		// 读取响应
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("读取响应失败: %w", err)
 		}
 
-		// 解析响应
 		var response SearchRsp
-		err = json.Unmarshal(body, &response)
-		if err != nil {
-			log.Printf("unmarshal error：%v,resp: %s", err, body)
-			continue
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, fmt.Errorf("解析响应失败: %v, body: %s", err, string(body))
+		}
+		return &response, nil
+	}
+
+	for i := 1; i <= 20; i++ {
+		const maxRetry = 3
+		var response *SearchRsp
+		var err error
+
+		for retry := 1; retry <= maxRetry; retry++ {
+			response, err = doSearchPage(i)
+			if err != nil {
+				log.Printf("请求第%d页失败（第%d次尝试）: %v", i, retry, err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			// 如果返回 401，触发验证码破解并重试
+			if response.Status == 401 {
+				log.Printf("检测到验证码过期（第%d页，第%d次尝试），开始重新识别...", i, retry)
+				if err := h.crackCaptcha(20); err != nil {
+					log.Printf("验证码识别失败: %v", err)
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			// 正常响应则跳出重试循环
+			break
 		}
 
 		// 为下一页设置查询参数
@@ -167,7 +201,7 @@ func (h *httpImpl) getNameAndValue(keyword string) (string, string, error) {
 
 	// 设置请求头部信息
 	req.Header.Set("Referer", "https://www.120bid.com/")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", constdef.UserAgent)
 
 	// 发送请求
 	resp, err := h.client.DoWithRetry(req, 3, 2*time.Second)
@@ -221,6 +255,198 @@ func getNameAndValueFromNode(n *html.Node, inputType, inputID string) (name, val
 	return
 }
 
+// captchaVerifyResp 验证码验证接口响应
+type captchaVerifyResp struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+}
+
+// crackCaptcha 破解验证码并提交
+func (h *httpImpl) crackCaptcha(maxRetry int) error {
+	if maxRetry <= 0 {
+		maxRetry = 5 // 默认最多尝试 5 次
+	}
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetry; attempt++ {
+		log.Printf("第 %d 次尝试识别验证码...\n", attempt)
+
+		// 调用 OCR 识别
+		codeText, err := h.verifyCaptcha()
+		if err != nil {
+			lastErr = fmt.Errorf("识别验证码出错: %w", err)
+			continue
+		}
+		log.Println("识别结果:", codeText)
+
+		// POST 提交验证码
+		api := "https://www.120bid.com/captcha/verify"
+		data := url.Values{}
+		data.Set("code", strings.TrimSpace(codeText))
+
+		req, err := http.NewRequest("POST", api, bytes.NewBufferString(data.Encode()))
+		if err != nil {
+			lastErr = fmt.Errorf("构造请求失败: %w", err)
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+		req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+		req.Header.Set("User-Agent", constdef.UserAgent)
+		req.Header.Set("Referer", "https://www.120bid.com/search")
+		req.Header.Set("Origin", "https://www.120bid.com")
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+		resp, err := h.client.DoWithRetry(req, 3, 3*time.Second)
+		if err != nil {
+			lastErr = fmt.Errorf("提交验证码失败: %w", err)
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		var result captchaVerifyResp
+		if err := json.Unmarshal(body, &result); err != nil {
+			lastErr = fmt.Errorf("解析响应失败: %w, body: %s", err, string(body))
+			continue
+		}
+
+		if result.Code == 1 {
+			log.Println("验证成功:", result.Msg)
+			return nil
+		}
+
+		log.Println("验证失败:", result.Msg)
+		// 短暂等待再重试（避免请求过快）
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("验证码多次识别失败: %v", lastErr)
+}
+
+type ocrResult struct {
+	Text  string `json:"text"`
+	Error string `json:"error"`
+}
+
+// verifyCaptcha 识别验证码
+func (h *httpImpl) verifyCaptcha() (string, error) {
+	captchaPath, err := h.getCaptcha()
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_ = os.Remove(captchaPath)
+	}()
+
+	// 获取 exe 所在目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("获取 exe 路径失败: %w", err)
+	}
+	exeDir := filepath.Dir(exePath)
+
+	// 默认 Python 脚本路径
+	pythonScript := filepath.Join(exeDir, "captcha_ocr.py")
+
+	// 如果 exeDir 下不存在，再尝试当前工作目录（IDE 运行时）
+	if _, err := os.Stat(pythonScript); os.IsNotExist(err) {
+		cwd, _ := os.Getwd()
+		pythonScript = filepath.Join(cwd, "captcha_ocr.py")
+	}
+
+	// 选择 Python 可执行文件
+	pythonBin := "python"
+	if _, err := exec.LookPath("python3"); err == nil {
+		pythonBin = "python3"
+	}
+
+	// 设置超时时间
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, pythonBin, pythonScript, captchaPath)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "", fmt.Errorf("调用 OCR 超时")
+	}
+	if err != nil {
+		// 返回 stderr 便于排查
+		return "", fmt.Errorf("调用 OCR 脚本失败: %w, stderr: %s", err, stderr.String())
+	}
+
+	// 解析 OCR 的 JSON 输出
+	var res ocrResult
+	if err := json.Unmarshal(stdout.Bytes(), &res); err != nil {
+		// 有可能脚本直接输出裸文本，作为兜底：尝试按行取第一个非空作为结果
+		trimOut := bytes.TrimSpace(stdout.Bytes())
+		if len(trimOut) > 0 {
+			// 直接认为是识别字符串
+			return string(trimOut), nil
+		}
+		return "", fmt.Errorf("解析 OCR 输出失败: %w", err)
+	}
+
+	if res.Error != "" {
+		return "", fmt.Errorf("OCR 脚本返回错误: %s", res.Error)
+	}
+	return res.Text, nil
+}
+
+// getCaptcha 获取验证码
+func (h *httpImpl) getCaptcha() (string, error) {
+	// 获取当前时间戳
+	getUnixNow := strconv.Itoa(int(time.Now().UnixNano() / 1000000))
+	// 拼接API
+	api := fmt.Sprintf("https://www.120bid.com/captcha/image?t=%s", getUnixNow)
+
+	// 构造请求
+	req, err := http.NewRequest("GET", api, nil)
+	if err != nil {
+		return "", err
+	}
+
+	// 设置请求头部信息
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Set("User-Agent", constdef.UserAgent)
+	req.Header.Set("Referer", "https://www.120bid.com/search")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+	// 发送请求
+	resp, err := h.client.DoWithRetry(req, 3, 3*time.Second)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// 写入临时文件
+	tmpFile, err := os.CreateTemp("", "captcha-*.jpeg")
+	if err != nil {
+		return "", fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.Write(body); err != nil {
+		// 尝试删除临时文件再返回
+		_ = os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("写入临时文件失败: %w", err)
+	}
+
+	return tmpFile.Name(), nil
+}
+
 // openSearchAll 开启全文搜索
 func (h *httpImpl) openSearchAll() error {
 	// 获取当前时间戳
@@ -239,7 +465,7 @@ func (h *httpImpl) openSearchAll() error {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.Header.Set("Sec-Fetch-Mode", "cors")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
+	req.Header.Set("User-Agent", constdef.UserAgent)
 	req.Header.Set("Referer", "https://www.120bid.com/search")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
@@ -280,7 +506,7 @@ func (h *httpImpl) GetHtmlContentAndUrl(target string) (string, string, error) {
 	// 设置请求头部信息
 	req.Header.Set("Host", "www.120bid.com")
 	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
+	req.Header.Set("User-Agent", constdef.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	req.Header.Set("Referer", "https://www.120bid.com/search")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
