@@ -1,4 +1,4 @@
-module 120bid
+module github.com/supercat0867/120bid
 
 go 1.24
 

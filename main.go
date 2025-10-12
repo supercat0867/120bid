@@ -1,9 +1,6 @@
 package main
 
 import (
-	"120bid/config"
-	"120bid/db"
-	"120bid/http"
 	"io"
 	"log"
 	"os"
@@ -11,6 +8,10 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/supercat0867/120bid/config"
+	"github.com/supercat0867/120bid/db"
+	"github.com/supercat0867/120bid/http"
 )
 
 // extractTextFromTagA 从a标签中提取文本内容

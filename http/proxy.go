@@ -1,7 +1,6 @@
 package http
 
 import (
-	"120bid/config"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +8,8 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"time"
+
+	"github.com/supercat0867/120bid/config"
 
 	"github.com/supercat0867/proxyhttp"
 	"golang.org/x/net/publicsuffix"

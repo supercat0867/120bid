@@ -1,12 +1,13 @@
 package db
 
 import (
-	"120bid/config"
 	"fmt"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/supercat0867/120bid/config"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

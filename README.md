@@ -10,6 +10,10 @@
 - 建议使用 Python 3.9 或更高版本（性能更好，兼容性更强）
 - 支持 Windows / macOS / Linux 系统
 
+### Golang 语言环境要求
+- Golang 1.24+
+- 支持 Windows / macOS / Linux 系统
+
 ### 安装依赖：
 进入项目根目录后执行：
 ```bash
@@ -26,6 +30,13 @@ python captcha_ocr.py example.jpeg
 ```bash
 {"text": "9Byx4"}
 ```
+
+### 编译
+进入项目根目录后执行：
+```bash
+go build
+```
+
 
 ## 参数说明
 

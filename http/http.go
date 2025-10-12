@@ -1,7 +1,6 @@
 package http
 
 import (
-	"120bid/constdef"
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
@@ -19,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/supercat0867/120bid/constdef"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/supercat0867/proxyhttp"
