@@ -27,13 +27,13 @@ func extractTextFromTagA(content string) string {
 // parseDate 尝试解析日期字符串，如果失败则返回当前日期
 func parseDate(dateStr string) string {
 	// 尝试按标准格式解析日期
-	_, err := time.Parse("2006-01-02", dateStr)
+	_, err := time.Parse(time.DateOnly, dateStr)
 	if err == nil {
 		// 如果解析成功，返回原始字符串
 		return dateStr
 	}
 	// 如果解析失败，返回当前日期
-	return time.Now().Format("2006-01-02")
+	return time.Now().Format(time.DateOnly)
 }
 
 // 初始化日志（控制台 + 文件）
@@ -110,22 +110,74 @@ func main() {
 		}(i, client)
 	}
 
-	for _, keyword := range cfg.Params.Keywords {
-		client := http.NewHttp()
+	var (
+		start, end       time.Time
+		hasStart, hasEnd bool
+		err              error
+	)
 
-		data, err := client.Search(http.QueryParams{
-			Query:     keyword,
-			Status:    cfg.Params.Status,
-			StartDate: cfg.Params.StartDate,
-			EndDate:   cfg.Params.EndDate,
-		})
+	if cfg.Params.StartDate != "" {
+		start, err = time.Parse(time.DateOnly, cfg.Params.StartDate)
 		if err != nil {
-			log.Printf("关键词【%s】查询失败：%v", keyword, err)
+			log.Fatalf("开始日期格式错误：%v", err)
+			return
+		}
+		hasStart = true
+	}
+	if cfg.Params.EndDate != "" {
+		end, err = time.Parse(time.DateOnly, cfg.Params.EndDate)
+		if err != nil {
+			log.Fatalf("结束日期格式错误：%v", err)
+			return
+		}
+		hasEnd = true
+	}
+
+	if hasStart && !hasEnd {
+		end = start
+		hasEnd = true
+	}
+	if !hasStart && hasEnd {
+		start = end
+		hasStart = true
+	}
+
+	for _, keyword := range cfg.Params.Keywords {
+
+		// 未设置日志默认查询全部
+		if !hasStart && !hasEnd {
+			data, err := http.NewHttp().Search(http.QueryParams{
+				Query:  keyword,
+				Status: cfg.Params.Status,
+			})
+			if err != nil {
+				log.Printf("关键词【%s】查询失败：%v", keyword, err)
+				continue
+			}
+			for _, v := range data {
+				itemChan <- v
+			}
 			continue
 		}
 
-		for _, v := range data {
-			itemChan <- v
+		// 填写了日期按天循环
+		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+			dateStr := d.Format(time.DateOnly)
+
+			data, err := http.NewHttp().Search(http.QueryParams{
+				Query:     keyword,
+				Status:    cfg.Params.Status,
+				StartDate: dateStr,
+				EndDate:   dateStr,
+			})
+			if err != nil {
+				log.Printf("关键词【%s】在日期【%s】查询失败：%v", keyword, dateStr, err)
+				continue
+			}
+
+			for _, v := range data {
+				itemChan <- v
+			}
 		}
 	}
 
