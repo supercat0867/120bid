@@ -114,7 +114,7 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
 		req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
-		resp, err := h.client.DoWithRetry(req, 3, 2*time.Second)
+		resp, err := h.client.DoWithRetry(req, constdef.RetryTimes, 2*time.Second)
 		if err != nil {
 			return nil, fmt.Errorf("请求失败: %w", err)
 		}
@@ -133,7 +133,7 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 	}
 
 	for i := 1; i <= 20; i++ {
-		const maxRetry = 3
+		const maxRetry = constdef.RetryTimes
 		var response *SearchRsp
 		var err error
 
@@ -159,6 +159,10 @@ func (h *httpImpl) Search(params QueryParams) ([]Data, error) {
 
 			// 正常响应则跳出重试循环
 			break
+		}
+
+		if err != nil {
+			return nil, err
 		}
 
 		// 为下一页设置查询参数
@@ -205,7 +209,7 @@ func (h *httpImpl) getNameAndValue(keyword string) (string, string, error) {
 	req.Header.Set("User-Agent", constdef.UserAgent)
 
 	// 发送请求
-	resp, err := h.client.DoWithRetry(req, 3, 2*time.Second)
+	resp, err := h.client.DoWithRetry(req, constdef.RetryTimes, 2*time.Second)
 	if err != nil {
 		return "", "", err
 	}
@@ -298,7 +302,7 @@ func (h *httpImpl) crackCaptcha(maxRetry int) error {
 		req.Header.Set("Origin", "https://www.120bid.com")
 		req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
-		resp, err := h.client.DoWithRetry(req, 3, 3*time.Second)
+		resp, err := h.client.DoWithRetry(req, constdef.RetryTimes, 3*time.Second)
 		if err != nil {
 			lastErr = fmt.Errorf("提交验证码失败: %w", err)
 			continue
@@ -420,7 +424,7 @@ func (h *httpImpl) getCaptcha() (string, error) {
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	// 发送请求
-	resp, err := h.client.DoWithRetry(req, 3, 3*time.Second)
+	resp, err := h.client.DoWithRetry(req, constdef.RetryTimes, 3*time.Second)
 	if err != nil {
 		return "", err
 	}
@@ -471,7 +475,7 @@ func (h *httpImpl) openSearchAll() error {
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	// 发送请求
-	resp, err := h.client.DoWithRetry(req, 3, 3*time.Second)
+	resp, err := h.client.DoWithRetry(req, constdef.RetryTimes, 3*time.Second)
 	if err != nil {
 		return err
 	}
@@ -515,7 +519,7 @@ func (h *httpImpl) GetHtmlContentAndUrl(target string) (string, string, error) {
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	// 发送请求
-	resp, err := h.client.DoWithRetry(req, 3, 5*time.Second)
+	resp, err := h.client.DoWithRetry(req, constdef.RetryTimes, 5*time.Second)
 	if err != nil {
 		return "", "", err
 	}
