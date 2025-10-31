@@ -142,10 +142,9 @@ func main() {
 		hasStart = true
 	}
 
-	for _, keyword := range cfg.Params.Keywords {
-
+	if !hasStart && !hasEnd {
 		// 未设置日志默认查询全部
-		if !hasStart && !hasEnd {
+		for _, keyword := range cfg.Params.Keywords {
 			data, err := http.NewHttp().Search(http.QueryParams{
 				Query:  keyword,
 				Status: cfg.Params.Status,
@@ -157,30 +156,32 @@ func main() {
 			for _, v := range data {
 				itemChan <- v
 			}
-			continue
 		}
-
+	} else {
 		// 填写了日期按天循环
 		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 			dateStr := d.Format(time.DateOnly)
 
-			data, err := http.NewHttp().Search(http.QueryParams{
-				Query:     keyword,
-				Status:    cfg.Params.Status,
-				StartDate: dateStr,
-				EndDate:   dateStr,
-			})
-			if err != nil {
-				log.Printf("关键词【%s】在日期【%s】查询失败：%v", keyword, dateStr, err)
-				continue
-			}
+			for _, keyword := range cfg.Params.Keywords {
+				data, err := http.NewHttp().Search(http.QueryParams{
+					Query:     keyword,
+					Status:    cfg.Params.Status,
+					StartDate: dateStr,
+					EndDate:   dateStr,
+				})
+				if err != nil {
+					log.Printf("关键词【%s】在日期【%s】查询失败：%v", keyword, dateStr, err)
+					continue
+				}
 
-			for _, v := range data {
-				itemChan <- v
+				for _, v := range data {
+					itemChan <- v
+				}
 			}
 		}
 	}
 
+	// 关闭通道
 	close(itemChan)
 
 	wg.Wait()
