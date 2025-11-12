@@ -502,6 +502,11 @@ func (h *httpImpl) openSearchAll() error {
 
 // GetHtmlContentAndUrl 获取html内容，公告原链接
 func (h *httpImpl) GetHtmlContentAndUrl(target string) (string, string, error) {
+	// 默认提交验证码验证
+	if err := h.crackCaptcha(20); err != nil {
+		return "", "", err
+	}
+
 	// 构造请求
 	req, err := http.NewRequest("GET", target, nil)
 	if err != nil {
