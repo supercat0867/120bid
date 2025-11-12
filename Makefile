@@ -21,3 +21,9 @@ build-linux:
 # 清理输出
 clean:
 	rm -rf build
+
+# 修改作者和提交者
+git-config:
+	GIT_AUTHOR_NAME="supercat0867" GIT_AUTHOR_EMAIL="howietung@163.com" \
+    GIT_COMMITTER_NAME="supercat0867" GIT_COMMITTER_EMAIL="howietung@163.com" \
+    git commit --amend --no-edit --reset-author
